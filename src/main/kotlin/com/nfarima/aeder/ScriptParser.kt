@@ -235,7 +235,7 @@ class ScriptParser(
             }
 
             delay(current.defaultActionDelay)
-            visionService.dumpContext()
+            //visionService.dumpContext()
         }
         val summary = visionService.requestSummary(scriptFile.readLines(),)
         if (summary != null) {
@@ -339,7 +339,7 @@ class ScriptParser(
                         }
                         delay(current.defaultActionDelay)
                         log("Input text: $text", false)
-                        if (!adb.inputText(text)) {
+                        if (!adb.inputTextSlowly(text)) {
                             silentFail("❌ Error inputting text: $text")
                         }
                     }

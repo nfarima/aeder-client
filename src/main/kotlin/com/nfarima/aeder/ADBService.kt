@@ -2,6 +2,8 @@ package com.nfarima.aeder
 
 import com.nfarima.aeder.config.Config
 import com.nfarima.aeder.util.*
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.runBlocking
 import java.io.BufferedReader
 import java.io.File
 import java.io.IOException
@@ -125,6 +127,21 @@ class ADBService {
         val (success, output) = executeAdbCommand("shell", "input", "text", formattedText)
         log(output, false)
         return success
+    }
+
+    // Inputs text into a text field
+    fun inputTextSlowly(text: String): Boolean = runBlocking {
+        val formattedText = text.trim()
+        log("⌨️ Inputting text slowly: '$formattedText'", false)
+        for (char in formattedText) {
+            val (success, output) = executeAdbCommand("shell", "input", "text", char.toString())
+            if (!success) {
+                log(output, false)
+                return@runBlocking false
+            }
+            delay(100)
+        }
+        return@runBlocking true
     }
 
     fun screenshot(step: Step): String? {
