@@ -1,11 +1,16 @@
 package com.nfarima.aeder
 
+import com.nfarima.aeder.config.AederCredentials
+import com.nfarima.aeder.util.initializeFiles
+import com.nfarima.aeder.util.initializeLogging
+import com.nfarima.aeder.util.log
 import kotlinx.coroutines.runBlocking
 
 var workingDir: String = System.getProperty("user.dir") + "/dist"
 
+
 fun main(args: Array<String>) = runBlocking {
-    println("Waking up Eder...")
+    println("Waking up Aeder...")
     if (args.isNotEmpty()) {
         workingDir = args[0]
         println("Working dir: $workingDir")
@@ -13,16 +18,16 @@ fun main(args: Array<String>) = runBlocking {
     initializeFiles()
     initializeLogging()
 
-
     val adb = ADBService()
-    log("ADB initialized.", false)
-    val gptService = GPTService()
-    log("GPT service initialized.", false)
-    val visionService = GoogleVisionService()
-    log("Vision service initialized.", false)
+    log("ADB initialized.", true)
 
-    val scriptParser = ScriptParser("script.txt", adb, gptService, visionService)
-    log("Script parser initialized.", false)
+    val credentials = AederCredentials.saved
+    val visionService = VisionService(credentials.lambdaUrl, credentials.apiKey, credentials.clientKey)
+    log("Vision service initialized.", true)
+
+    val scriptParser = ScriptParser("script.txt", adb, visionService)
+    log("Script parser initialized.", true)
+
     scriptParser.compile()
     scriptParser.start()
 }

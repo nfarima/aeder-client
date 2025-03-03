@@ -1,12 +1,11 @@
 package com.nfarima.aeder
 
-import java.awt.Image
-import java.awt.image.BufferedImage
+import com.nfarima.aeder.config.Config
+import com.nfarima.aeder.util.*
 import java.io.BufferedReader
 import java.io.File
 import java.io.IOException
 import java.io.InputStreamReader
-import javax.imageio.ImageIO
 
 class ADBService {
 
@@ -109,7 +108,7 @@ class ADBService {
     }
 
     // Simulates a swipe from (x1, y1) to (x2, y2)
-    fun swipe(x1: Int, y1: Int, x2: Int, y2: Int, duration: Int = 1000): Boolean {
+    fun swipe(x1: Int, y1: Int, x2: Int, y2: Int, duration: Int = 200): Boolean {
         log("👉 Swiping from ($x1, $y1) to ($x2, $y2) over ${duration}ms", false)
         val (success, output) = executeAdbCommand(
             "shell", "input", "swipe",
@@ -153,34 +152,18 @@ class ADBService {
             return null
         }
 
-        log("✅ Screenshot saved as 'current_resized.png'.", false)
+        if (Config.current.coverMobileStatusBar) {
+            log("🖌️ Applying black bar on the top 4% of the image...", false)
+            if (!applyBlackBar(localFilePath)) {
+                log("❌ Failed to apply black bar", false)
+                return null
+            }
+        }
+
+        log("✅ Screenshot saved as '$localFilePath'.", false)
         return localFilePath
     }
 
-    private fun resizeImage(inputPath: String, outputPath: String, minSize: Int): Boolean {
-        return try {
-            val originalImage: BufferedImage = ImageIO.read(File(inputPath))
-            val width = originalImage.width
-            val height = originalImage.height
-
-            scaleFactor = minSize.toDouble() / minOf(width, height)
-            val newWidth = (width * scaleFactor).toInt()
-            val newHeight = (height * scaleFactor).toInt()
-
-            val resizedImage = BufferedImage(newWidth, newHeight, BufferedImage.TYPE_INT_ARGB)
-            val graphics = resizedImage.createGraphics()
-            graphics.drawImage(originalImage.getScaledInstance(newWidth, newHeight, Image.SCALE_SMOOTH), 0, 0, null)
-            graphics.dispose()
-
-            ImageIO.write(resizedImage, "png", File(outputPath))
-            true
-        } catch (e: Exception) {
-            log("Error resizing image: ${e.message}", false)
-            false
-        }
-    }
-
-    // Gets the current activity name
     fun getCurrentActivity(): String {
         val (success, output) = executeAdbCommand(
             "shell",

@@ -2,13 +2,14 @@ package com.nfarima.aeder
 
 import com.google.gson.Gson
 import java.io.File
+import java.util.UUID
 import kotlin.properties.ReadWriteProperty
 import kotlin.reflect.KProperty
 
 
 abstract class Persistable<T>(
     private val initialValue: T,
-    private val name: String? = null,
+    private val name: String,
     private val afterSet: (T) -> Unit = {}
 ) : ReadWriteProperty<Any?, T> {
     internal val json = Gson()
@@ -20,9 +21,7 @@ abstract class Persistable<T>(
     }
 
     init {
-        if (name != null) {
-            require(name.isNotBlank()) { "Name cannot be blank" }
-        }
+        require(name.isNotBlank()) { "Name cannot be blank" }
     }
 
     private var cached: T? = null
@@ -45,8 +44,7 @@ abstract class Persistable<T>(
 
 inline fun <reified T : Any> persisted(
     initialValue: T,
-    name: String? = null,
-    fileName: String = "config"
+    name: String,
 ): Persistable<T> {
     return object : Persistable<T>(initialValue, name) {
 

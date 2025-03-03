@@ -9,6 +9,7 @@ Demo1Console.app
 ### IntelliJ IDEA ###
 .idea/*
 .idea
+/.idea/
 .run
 *.iws
 *.iml
