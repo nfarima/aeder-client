@@ -1,6 +1,6 @@
 package com.nfarima.aeder.config
 
-import com.nfarima.aeder.persisted
+import com.nfarima.aeder.util.persisted
 
 class AederCredentials {
     val lambdaUrl = "https://5dnw5sw9j1.execute-api.eu-north-1.amazonaws.com/Default/aeder-vision"

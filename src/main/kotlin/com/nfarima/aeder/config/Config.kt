@@ -1,6 +1,6 @@
 package com.nfarima.aeder.config
 
-import com.nfarima.aeder.persisted
+import com.nfarima.aeder.util.persisted
 
 class Config {
     var longDelay = 3000L

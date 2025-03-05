@@ -1,21 +1,25 @@
-package com.nfarima.aeder
+package com.nfarima.aeder.script
 
+import com.nfarima.aeder.service.VisionResponse
+import com.nfarima.aeder.service.VisionService
 import com.nfarima.aeder.config.Config.Companion.current
+import com.nfarima.aeder.uibridge.ADBService
 import com.nfarima.aeder.util.*
+import com.nfarima.aeder.workingDir
 import kotlinx.coroutines.delay
 import java.io.File
 
 data class Step(
     val name: String,
     val assertions: List<String>,
-    val actions: List<String>
+    val actions: List<String>,
+    var isLastStep: Boolean = false,
 ) {
     override fun toString(): String {
         return "name = $name (${assertions.size} assertions, ${actions.size} actions)"
     }
 }
 
-// A Task can be a command or a step
 sealed class Task {
     data class Install(val command: String) : Task()
     data class Uninstall(val packageName: String) : Task()
@@ -24,39 +28,67 @@ sealed class Task {
     data class Back(val notUsed: String) : Task()
     data class Home(val notUsed: String) : Task()
     data class RecentApps(val notUsed: String) : Task()
-    data class StepTask(val step: Step, val repeating: Boolean = false, val maxRepeats: Int = 20) : Task()
+    data class StepTask(
+        val step: Step,
+        val type: StepType = StepType.NORMAL,
+        val maxRepeats: Int = 10,
+    ) : Task()
+
     data class Wait(val seconds: Int) : Task()
     data class Description(val description: String) : Task()
 }
 
+enum class StepSection {
+    ASSERTIONS,
+    ACTIONS,
+    MEMORIES,
+    NONE,
+}
+
+enum class StepType {
+    NORMAL,
+    REPEATING,
+    CREATIVE,
+    NONE
+}
+
 class ScriptParser(
-    private val scriptFilename: String,
     private val adb: ADBService,
     private val visionService: VisionService
 ) {
-    private val scriptFile = File(workingDir, scriptFilename)
+    private val scriptFileName = "script.txt"
+    private val macrosFileName = "macros.txt"
+
+    private val scriptFile = File(workingDir, scriptFileName)
+    private val macrosFile = File(workingDir, macrosFileName)
 
     private val tasks = mutableListOf<Task>()
 
+    private var previousRequestId: String? = null
+
     fun compile() {
         if (!scriptFile.exists()) {
-            log("❌ Error: Script file '$scriptFilename' not found.", true)
+            log("❌ Error: Script file '$scriptFileName' not found.", true)
             return
         }
 
-        log("🔍 Compiling script: $scriptFilename", true)
+        log("🔍 Compiling script: $scriptFileName", true)
 
-        val lines = scriptFile.readLines()
-        var insideStep = false
-        var insideRepeatingStep = false
+        var lines = scriptFile.readLines()
+        val macroParser = MacroParser()
+        macroParser.parse(macrosFile)
+        lines = macroParser.expandMacros(lines)
 
-        val insideAnyStep: () -> Boolean = { insideStep || insideRepeatingStep }
+        var stepType = StepType.NONE
 
-        var hasAssertions = false
-        var hasActions = false
+        val insideAnyStep: () -> Boolean = { stepType != StepType.NONE }
+
+        var currentStepSubSection: StepSection = StepSection.NONE
+
         var stepName = ""
         val assertions = mutableListOf<String>()
         val actions = mutableListOf<String>()
+        val memories = mutableListOf<String>()
 
         for (line in lines) {
             var command = line.trim()
@@ -99,50 +131,60 @@ class ScriptParser(
 
                 command.startsWith("step ", ignoreCase = true) -> {
                     if (insideAnyStep()) error("❌ Error: Step '$stepName' is missing 'assertions:' or 'actions:' before 'end'.")
-                    insideStep = true
+                    stepType = StepType.NORMAL
                     stepName = command.removePrefix("step ").trim()
                     assertions.clear()
                     actions.clear()
-                    hasAssertions = false
-                    hasActions = false
+                    currentStepSubSection = StepSection.NONE
                 }
 
                 command.startsWith("repeating step ", ignoreCase = true) -> {
                     if (insideAnyStep()) error("❌ Error: Step '$stepName' is missing 'assertions:' or 'actions:' before 'end'.")
-                    insideRepeatingStep = true
+                    stepType = StepType.REPEATING
                     stepName = command.removePrefix("repeating step ").trim()
                     assertions.clear()
                     actions.clear()
-                    hasAssertions = false
-                    hasActions = false
+                    currentStepSubSection = StepSection.NONE
+                }
+
+                command.startsWith("creative step ", ignoreCase = true) -> {
+                    if (insideAnyStep()) error("❌ Error: Step '$stepName' is missing 'assertions:' or 'actions:' before 'end'.")
+                    stepType = StepType.CREATIVE
+                    stepName = command.removePrefix("creative step ").trim()
+                    assertions.clear()
+                    actions.clear()
+                    currentStepSubSection = StepSection.NONE
                 }
 
 
                 command.equals("assertions:", ignoreCase = true) -> {
-                    hasAssertions = true
-                    hasActions = false
+                    currentStepSubSection = StepSection.ASSERTIONS
                 }
 
                 command.equals("actions:", ignoreCase = true) -> {
-                    hasAssertions = false
-                    hasActions = true
+                    currentStepSubSection = StepSection.ACTIONS
+                }
+
+                command.equals("remember ", ignoreCase = true) -> {
+                    currentStepSubSection = StepSection.MEMORIES
+
                 }
 
                 command.equals("end", ignoreCase = true) -> {
                     if (!insideAnyStep()) fail("❌ Error: 'end' found without a matching 'step'.")
-                    val task = Task.StepTask(Step(stepName, assertions.toList(), actions.toList()), insideRepeatingStep)
+                    val task = Task.StepTask(Step(stepName, assertions.toList(), actions.toList()), stepType)
                     tasks.add(task)
-                    insideStep = false
-                    insideRepeatingStep = false
-                    hasAssertions = false
-                    hasActions = false
+                    stepType = StepType.NONE
+                    currentStepSubSection = StepSection.NONE
                 }
 
-                hasAssertions -> assertions.add(command)
-                hasActions -> actions.add(command)
+                currentStepSubSection == StepSection.ASSERTIONS -> assertions.add(command)
+                currentStepSubSection == StepSection.ACTIONS -> actions.add(command)
+                currentStepSubSection == StepSection.MEMORIES -> memories.add(command)
             }
         }
 
+        tasks.filterIsInstance<Task.StepTask>().lastOrNull()?.step?.isLastStep = true
         log("✅ Script compiled successfully!", true)
     }
 
@@ -203,23 +245,23 @@ class ScriptParser(
                 }
 
                 is Task.StepTask -> {
-                    if (!task.repeating) {
-                        val result = processStep(task.step)
+                    if (task.type == StepType.NORMAL || task.type == StepType.CREATIVE) {
+                        val result = processStep(task)
                         result != null
                     } else {
                         var stop = false
                         var counter = task.maxRepeats
                         var success = false
                         while (!stop) {
-                            val result = processStep(task.step)
+                            val result = processStep(task)
                             if (result == null) {
                                 success = false
                                 break
                             }
 
-                            success = result.actions.any {
+                            success = result.actions?.any {
                                 it.contains("stop", ignoreCase = true)
-                            }
+                            } ?: false
 
                             stop = counter-- <= 0 || success
                         }
@@ -235,9 +277,9 @@ class ScriptParser(
             }
 
             delay(current.defaultActionDelay)
-            //visionService.dumpContext()
+            visionService.dumpContext()
         }
-        val summary = visionService.requestSummary(scriptFile.readLines(),)
+        val summary = visionService.requestSummary(scriptFile.readLines())
         if (summary != null) {
             log("Status is: ${summary.status}", true)
             log("Summary: ${summary.summary}", true)
@@ -245,7 +287,8 @@ class ScriptParser(
         log("✅ Script execution completed!", true)
     }
 
-    private suspend fun processStep(step: Step, creative: Boolean = false): VisionResponse? {
+    private suspend fun processStep(task: Task.StepTask): VisionResponse? {
+        val step = task.step
         log("Processing screen contents for step: ${step.name}", true)
 
         val imageFile = adb.screenshot(step) ?: run {
@@ -261,10 +304,18 @@ class ScriptParser(
 
         log("📡 Sending image to Aeder Vision Service for step: ${step.name}", true)
 
-        val response = visionService.processStep(step, base64Image, creative)
+        val temperature = if (task.type == StepType.CREATIVE) 0.9 else 0.1
+        val response = visionService.processStep(step, base64Image, temperature, previousRequestId)
+
+        previousRequestId = response?.requestId
 
         response ?: run {
             fail("❌ Failed to process screen contents for step: ${step.name}")
+            return null
+        }
+
+        response.actions ?: kotlin.run {
+            log("No actions found in response. Should probably fail?", true)
             return null
         }
 
@@ -272,7 +323,7 @@ class ScriptParser(
 
         val passedAssertions = response.passedAssertions
 
-        if (failedAssertions.isNotEmpty()) {
+        if (!failedAssertions.isNullOrEmpty()) {
             log("❌ Step '${step.name}' failed the following assertions:", true)
             failedAssertions.forEach { log("   - $it", true) }
             val allOptional = failedAssertions.all { it.contains("optional", true) }
@@ -284,14 +335,14 @@ class ScriptParser(
             }
         }
 
-        if (passedAssertions.isNotEmpty()) {
+        if (passedAssertions?.isNotEmpty() == true) {
             log("✅ Step '${step.name}' passed the following assertions:", true)
             passedAssertions.forEach { log("   - $it", true) }
             log("${passedAssertions.size} of ${step.assertions.size} passed", true)
         }
 
-        val actions = response.actions
-        log("🔹Actions: ${actions.joinToString(separator = ",")}", true)
+        val actions = response.actions ?: emptyList()
+        log(message = "🔹Actions: ${actions.joinToString(separator = ",")}", toScreen = true)
         executeActions(actions)
 
         return response

@@ -1,8 +1,8 @@
-package com.nfarima.aeder
+package com.nfarima.aeder.util
 
 import com.google.gson.Gson
+import com.nfarima.aeder.workingDir
 import java.io.File
-import java.util.UUID
 import kotlin.properties.ReadWriteProperty
 import kotlin.reflect.KProperty
 

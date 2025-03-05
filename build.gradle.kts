@@ -34,13 +34,13 @@ dependencies {
 }
 
 application {
-    mainClass.set("MainKt")  // ✅ Ensures correct entry point for JVM console app
+    mainClass.set("MainKt")
 }
 tasks.jar {
-    archiveBaseName.set("eder")
-    archiveVersion.set("")  // Removes version suffix for cleaner output
+    archiveBaseName.set("aeder")
+    archiveVersion.set("")
     manifest {
-        attributes["Main-Class"] = "com.nfarima.eder.MainKt"
+        attributes["Main-Class"] = "com.nfarima.aeder.MainKt"
     }
     from(
         configurations.runtimeClasspath.get().map {
@@ -53,14 +53,14 @@ tasks.jar {
 tasks.register("packageApp") {
     dependsOn("jar")
     doLast {
-        val jarFile = file("build/libs/eder.jar")
+        val jarFile = file("build/libs/aeder.jar")
         val shFile = file("dist/run.command")
 
         shFile.writeText(
             """
             #!/bin/bash
             SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-            java -jar "${'$'}SCRIPT_DIR/eder.jar" ${'$'}SCRIPT_DIR
+            java -jar "${'$'}SCRIPT_DIR/aeder.jar" ${'$'}SCRIPT_DIR
             """.trimIndent()
         )
         shFile.setExecutable(true)

@@ -1,7 +1,8 @@
-package com.nfarima.aeder
+package com.nfarima.aeder.service
 
 import com.google.gson.Gson
 import com.google.gson.JsonParser
+import com.nfarima.aeder.script.Step
 import com.nfarima.aeder.util.log
 import io.ktor.client.*
 import io.ktor.client.engine.cio.*
@@ -9,7 +10,6 @@ import io.ktor.client.plugins.contentnegotiation.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.serialization.gson.*
-import io.ktor.util.*
 
 class VisionService(private val lambdaUrl: String, private val apiKey: String, private val clientKey: String) {
     private val client = HttpClient(CIO) {
@@ -24,12 +24,12 @@ class VisionService(private val lambdaUrl: String, private val apiKey: String, p
     }
 
     private var description: String = ""
-    var accumulatedContext = mutableListOf<String>()
+    private var accumulatedContext = mutableListOf<String>()
     private val gson = Gson()
 
     private fun normalizeJson(json: String): String {
         val jsonObject = JsonParser.parseString(json).asJsonObject
-        return Gson().toJson(jsonObject) // Ensures sorted keys
+        return Gson().toJson(jsonObject)
     }
 
     fun updateDescription(description: String) {
@@ -38,9 +38,9 @@ class VisionService(private val lambdaUrl: String, private val apiKey: String, p
         accumulatedContext.add(description)
     }
 
-    fun dumpContext() {
+    fun dumpContext(toScreen: Boolean = false) {
         accumulatedContext.forEach {
-            log("🔹 Context: $it", true)
+            log("🔹 Context: $it", toScreen)
         }
     }
 
@@ -50,13 +50,13 @@ class VisionService(private val lambdaUrl: String, private val apiKey: String, p
             "script" to lines.joinToString(separator = "\n"),
             "context" to accumulatedContext.joinToString(separator = "\n")
         )
-        val requestBodyJson = normalizeJson(gson.toJson(requestBody))
+        val requestBodyJson = gson.toJson(requestBody)
 
         return try {
             val httpResponse: HttpResponse = makeRequest(requestBodyJson)
 
             val jsonResponse = httpResponse.bodyAsText()
-//            log("🔹 Raw Response: $jsonResponse", true)
+            log("🔹 Raw Response: $jsonResponse", false)
 
             val result = Gson().fromJson(jsonResponse, SummaryResponse::class.java)
             result
@@ -66,17 +66,25 @@ class VisionService(private val lambdaUrl: String, private val apiKey: String, p
         }
     }
 
-    suspend fun processStep(step: Step, base64Image: String, creative: Boolean = false): VisionResponse? {
+    suspend fun processStep(
+        step: Step,
+        base64Image: String,
+        temperature: Double,
+        previousRequestId: String?,
+    ): VisionResponse? {
+
         val requestBody = mapOf(
             "image" to base64Image,
             "stepName" to step.name,
             "description" to description,
             "assertions" to step.assertions,
             "actions" to step.actions,
-            "creative" to creative,
-            "context" to accumulatedContext.joinToString(separator = "\n")
+            "temperature" to temperature,
+            "context" to accumulatedContext.joinToString(separator = "\n"),
+            "previous" to previousRequestId,
+            "last" to step.isLastStep
         )
-        val requestBodyJson = normalizeJson(gson.toJson(requestBody))
+        val requestBodyJson = gson.toJson(requestBody)
 
 
         return try {
@@ -87,11 +95,11 @@ class VisionService(private val lambdaUrl: String, private val apiKey: String, p
             val jsonResponse = httpResponse.bodyAsText()
             log(
                 "🔹 ${httpResponse.headers["X-Cache-Status"]?.first()} Raw Vision Response: $jsonResponse",
-                true
+                false
             )
 
             val result = Gson().fromJson(jsonResponse, VisionResponse::class.java)
-            accumulatedContext.add(result.context)
+            accumulatedContext.add(result.context ?: "")
             result
         } catch (e: Exception) {
             println("❌ Error communicating with Vision service: ${e.message}")
@@ -119,13 +127,14 @@ data class SummaryResponse(
 )
 
 data class VisionResponse(
-    val status: String,
-    val failedAssertions: List<String> = emptyList(),
-    val passedAssertions: List<String> = emptyList(),
-    val imageWidth: Int,
-    val imageHeight: Int,
-    val actions: List<String> = emptyList(),
-    val width: Double,
-    val height: Double,
-    val context: String
+    val status: String?,
+    val failedAssertions: List<String>? = emptyList(),
+    val passedAssertions: List<String>? = emptyList(),
+    val imageWidth: Int?,
+    val imageHeight: Int?,
+    val actions: List<String>? = emptyList(),
+    val width: Double?,
+    val height: Double?,
+    val context: String?,
+    val requestId: String
 )

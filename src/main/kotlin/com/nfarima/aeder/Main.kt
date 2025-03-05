@@ -1,6 +1,9 @@
 package com.nfarima.aeder
 
 import com.nfarima.aeder.config.AederCredentials
+import com.nfarima.aeder.script.ScriptParser
+import com.nfarima.aeder.service.VisionService
+import com.nfarima.aeder.uibridge.ADBService
 import com.nfarima.aeder.util.initializeFiles
 import com.nfarima.aeder.util.initializeLogging
 import com.nfarima.aeder.util.log
@@ -25,7 +28,7 @@ fun main(args: Array<String>) = runBlocking {
     val visionService = VisionService(credentials.lambdaUrl, credentials.apiKey, credentials.clientKey)
     log("Vision service initialized.", true)
 
-    val scriptParser = ScriptParser("script.txt", adb, visionService)
+    val scriptParser = ScriptParser(adb, visionService)
     log("Script parser initialized.", true)
 
     scriptParser.compile()

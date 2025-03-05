@@ -1,7 +1,9 @@
-package com.nfarima.aeder
+package com.nfarima.aeder.uibridge
 
+import com.nfarima.aeder.script.Step
 import com.nfarima.aeder.config.Config
 import com.nfarima.aeder.util.*
+import com.nfarima.aeder.workingDir
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import java.io.BufferedReader
@@ -47,6 +49,17 @@ class ADBService {
         }
         log("📲 Installing APK: ${apkFile.name}", true)
         val (success, output) = executeAdbCommand("install", apkFile.absolutePath)
+        log(output, false)
+        return success
+    }
+
+    fun installInstantApk(): Boolean {
+        val apkFile = findApkFile() ?: run {
+            log("❌ No APK file found in the current directory.", true)
+            return false
+        }
+        log("📲 Installing APK: ${apkFile.name}", true)
+        val (success, output) = executeAdbCommand("install -r --instantapp ", apkFile.absolutePath)
         log(output, false)
         return success
     }
