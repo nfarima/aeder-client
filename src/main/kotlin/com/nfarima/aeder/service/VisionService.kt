@@ -102,7 +102,7 @@ class VisionService(private val lambdaUrl: String, private val apiKey: String, p
             accumulatedContext.add(result.context ?: "")
             result
         } catch (e: Exception) {
-            println("❌ Error communicating with Vision service: ${e.message}")
+            log("❌ Error communicating with Vision service: ${e.message}",false)
             null
         }
     }
