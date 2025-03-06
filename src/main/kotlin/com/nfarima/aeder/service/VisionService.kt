@@ -54,7 +54,7 @@ class VisionService(private val lambdaUrl: String, private val apiKey: String, p
 
         return try {
             val httpResponse: HttpResponse = makeRequest(requestBodyJson)
-
+            println(httpResponse)
             val jsonResponse = httpResponse.bodyAsText()
             log("🔹 Raw Response: $jsonResponse", false)
 

@@ -3,7 +3,7 @@ package com.nfarima.aeder.config
 import com.nfarima.aeder.util.persisted
 
 class AederCredentials {
-    val lambdaUrl = "https://5dnw5sw9j1.execute-api.eu-north-1.amazonaws.com/Default/aeder-vision"
+    val lambdaUrl = "https://dkon4qobe5.execute-api.eu-north-1.amazonaws.com/prod/process"
     val apiKey = "general access key here"
     val clientKey = "client key here"
 
